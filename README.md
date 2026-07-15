@@ -20,6 +20,18 @@
 - GitHub Actions 크론: `0 12 * * 1-6` (= 21:00 KST, 월~토). 일요일 휴무.
 - `workflow_dispatch`로 수동 실행(테스트) 가능.
 
+### 드라이런(게시 없이 글 생성만 검증)
+
+Threads 토큰 없이 `ANTHROPIC_API_KEY`만으로 생성 파이프라인을 검증한다.
+
+```bash
+# GitHub Actions에서
+gh workflow run threads-daily.yml -R <owner>/<repo> -f dry_run=true
+
+# 로컬에서
+DRY_RUN=1 python threads_post.py
+```
+
 ## 필요한 GitHub Secrets
 
 | 이름 | 설명 |
