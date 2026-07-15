@@ -1,0 +1,28 @@
+name: 0ra_marketing 스레드 자동 게시
+
+# 월~토 오후 9시(KST). GitHub Actions 크론은 UTC 기준이라
+# 21:00 KST = 12:00 UTC → "0 12 * * 1-6"
+on:
+  schedule:
+    - cron: "0 12 * * 1-6"
+  workflow_dispatch: {}   # 수동 실행 버튼 (테스트용)
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: 스레드 게시
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+        run: python threads_post.py
