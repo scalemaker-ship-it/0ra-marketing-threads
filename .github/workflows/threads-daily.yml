@@ -5,7 +5,12 @@ name: 0ra_marketing 스레드 자동 게시
 on:
   schedule:
     - cron: "0 12 * * 1-6"
-  workflow_dispatch: {}   # 수동 실행 버튼 (테스트용)
+  workflow_dispatch:      # 수동 실행 버튼 (테스트용)
+    inputs:
+      dry_run:
+        description: "게시하지 않고 글 생성만 검증(토큰 불필요)"
+        type: boolean
+        default: false
 
 jobs:
   post:
@@ -25,4 +30,5 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: python threads_post.py

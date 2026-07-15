@@ -252,10 +252,21 @@ def post_to_threads(user_id: str, access_token: str, post: dict) -> str:
     return main_id
 
 
+def _is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def main() -> None:
     require_env("ANTHROPIC_API_KEY")  # SDK가 환경변수로 읽음
-    user_id = require_env("THREADS_USER_ID")
-    access_token = require_env("THREADS_ACCESS_TOKEN")
+
+    # DRY_RUN: Threads 토큰 없이 글 생성 파이프라인만 검증(게시 스킵).
+    dry_run = _is_truthy(os.environ.get("DRY_RUN"))
+    if dry_run:
+        user_id = access_token = ""
+        print("[DRY_RUN] 게시는 건너뛰고 글 생성만 검증합니다.")
+    else:
+        user_id = require_env("THREADS_USER_ID")
+        access_token = require_env("THREADS_ACCESS_TOKEN")
 
     now = datetime.now(KST)
     weekday = now.isoweekday()  # 월=1 ... 일=7
@@ -276,6 +287,13 @@ def main() -> None:
         print(f"--- 첫 댓글 ---\n{post['first_comment']}")
     print(f"[훅: {post.get('hook_type')}]")
     print("=================")
+
+    if dry_run:
+        hits = find_banned(_all_text(post))
+        print(f"[DRY_RUN] 금지어 검사: {'통과' if not hits else '실패 → ' + ', '.join(hits)}")
+        print(f"[DRY_RUN] 본문 길이: {len(post['main'])}자")
+        print("[DRY_RUN] 게시하지 않고 종료합니다.")
+        return
 
     main_id = post_to_threads(user_id, access_token, post)
     print(f"게시 완료. 메인 Threads 게시물 ID: {main_id}")
