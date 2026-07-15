@@ -15,6 +15,8 @@
   THREADS_ACCESS_TOKEN  Threads 액세스 토큰
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
