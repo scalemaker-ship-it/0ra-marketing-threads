@@ -320,6 +320,31 @@ def _is_truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+# 오늘 하루만 자동생성 대신 '고정 글'을 게시하고 싶을 때 쓰는 오버라이드.
+# 레포 루트에 pinned_post.json 을 두고 "date"(KST, YYYY-MM-DD)가 오늘과 같으면
+# 생성을 건너뛰고 이 글을 그대로 게시한다. 날짜가 지나면 자동으로 원래(자동생성)대로 복귀.
+_PINNED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pinned_post.json")
+
+
+def load_pinned_post(today: str) -> dict | None:
+    if not os.path.exists(_PINNED_PATH):
+        return None
+    try:
+        with open(_PINNED_PATH, encoding="utf-8") as fp:
+            data = json.load(fp)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[경고] pinned_post.json 읽기 실패 → 자동생성으로 진행: {exc}")
+        return None
+    if data.get("date") != today:
+        return None
+    if not data.get("main"):
+        print("[경고] pinned_post.json 에 main 이 없어 자동생성으로 진행합니다.")
+        return None
+    data.setdefault("thread_chain", [])
+    data.setdefault("first_comment", "")
+    return data
+
+
 def main() -> None:
     require_env("ANTHROPIC_API_KEY")  # SDK가 환경변수로 읽음
 
@@ -336,11 +361,16 @@ def main() -> None:
     if now.isoweekday() == 7:  # 일요일 휴무
         print(f"오늘({now:%Y-%m-%d %A})은 게시일이 아닙니다(일요일 휴무). 종료합니다.")
         return
-    # 소재 풀을 날짜 기준으로 순환 선택 → 블로그·유튜브 주제가 골고루 나온다.
-    topic = TOPICS[now.date().toordinal() % len(TOPICS)]
-
-    print(f"[{now:%Y-%m-%d %H:%M KST}] 소재: {topic['name']} (훅: {topic['hook']})")
-    post = generate_post(topic)
+    # 고정 글 오버라이드(오늘 날짜에만 적용). 있으면 자동생성을 건너뛴다.
+    pinned = load_pinned_post(f"{now:%Y-%m-%d}")
+    if pinned is not None:
+        print(f"[{now:%Y-%m-%d %H:%M KST}] 고정 글(pinned_post.json)을 게시합니다.")
+        post = pinned
+    else:
+        # 소재 풀을 날짜 기준으로 순환 선택 → 블로그·유튜브 주제가 골고루 나온다.
+        topic = TOPICS[now.date().toordinal() % len(TOPICS)]
+        print(f"[{now:%Y-%m-%d %H:%M KST}] 소재: {topic['name']} (훅: {topic['hook']})")
+        post = generate_post(topic)
 
     print("=== 생성된 글 ===")
     print(post["main"])
