@@ -11,6 +11,10 @@ on:
         description: "게시하지 않고 글 생성만 검증(토큰 불필요)"
         type: boolean
         default: false
+      check_token:
+        description: "게시 안 하고 토큰이 어느 계정인지 확인(진단용)"
+        type: boolean
+        default: false
 
 jobs:
   post:
@@ -31,4 +35,5 @@ jobs:
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run }}
+          CHECK_TOKEN: ${{ inputs.check_token }}
         run: python threads_post.py

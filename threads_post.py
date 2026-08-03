@@ -346,6 +346,20 @@ def load_pinned_post(today: str) -> dict | None:
 
 
 def main() -> None:
+    # CHECK_TOKEN: 게시하지 않고 THREADS 토큰이 어느 계정에 물렸는지 확인(진단용).
+    if _is_truthy(os.environ.get("CHECK_TOKEN")):
+        uid = require_env("THREADS_USER_ID")
+        tok = require_env("THREADS_ACCESS_TOKEN")
+        r = requests.get(
+            f"https://graph.threads.net/v1.0/{uid}",
+            params={"fields": "username", "access_token": tok},
+            timeout=30,
+        )
+        print(f"HTTP {r.status_code}: {r.text[:300]}")
+        r.raise_for_status()
+        print(f"토큰 계정 = @{r.json().get('username')} (USER_ID={uid})")
+        return
+
     require_env("ANTHROPIC_API_KEY")  # SDK가 환경변수로 읽음
 
     # DRY_RUN: Threads 토큰 없이 글 생성 파이프라인만 검증(게시 스킵).
