@@ -358,6 +358,15 @@ def main() -> None:
         print(f"HTTP {r.status_code}: {r.text[:300]}")
         r.raise_for_status()
         print(f"토큰 계정 = @{r.json().get('username')} (USER_ID={uid})")
+        # API가 보는 최근 게시물 목록(실제 발행/노출 여부 확인)
+        lst = requests.get(
+            f"https://graph.threads.net/v1.0/{uid}/threads",
+            params={"fields": "id,permalink,timestamp,text", "limit": 8, "access_token": tok},
+            timeout=30,
+        )
+        print(f"[최근 글 목록] HTTP {lst.status_code}")
+        for t in lst.json().get("data", []):
+            print(f"  - {t.get('timestamp')} | {t.get('permalink')} | {(t.get('text') or '')[:30]}")
         return
 
     require_env("ANTHROPIC_API_KEY")  # SDK가 환경변수로 읽음
