@@ -345,6 +345,26 @@ def load_pinned_post(today: str) -> dict | None:
     return data
 
 
+_QUEUE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "posts_queue.json")
+
+
+def load_queue() -> list[dict]:
+    """미리 써둔 글 큐(posts_queue.json)를 읽는다.
+
+    Claude 자동생성 대신 이 큐에서 날짜 기준으로 매일 한 편씩 순환 선택해 게시한다.
+    → API 호출이 없어 Anthropic 크레딧을 전혀 쓰지 않는다.
+    """
+    with open(_QUEUE_PATH, encoding="utf-8") as fp:
+        data = json.load(fp)
+    posts = data.get("posts", []) if isinstance(data, dict) else data
+    if not posts:
+        sys.exit("[오류] posts_queue.json 에 게시할 글이 없습니다.")
+    for p in posts:
+        p.setdefault("thread_chain", [])
+        p.setdefault("first_comment", "")
+    return posts
+
+
 def main() -> None:
     # CHECK_TOKEN: 게시하지 않고 THREADS 토큰이 어느 계정에 물렸는지 확인(진단용).
     if _is_truthy(os.environ.get("CHECK_TOKEN")):
@@ -369,9 +389,10 @@ def main() -> None:
             print(f"  - {t.get('timestamp')} | {t.get('permalink')} | {(t.get('text') or '')[:30]}")
         return
 
-    require_env("ANTHROPIC_API_KEY")  # SDK가 환경변수로 읽음
+    # 크레딧 없이 자동 발행: 글은 미리 써둔 posts_queue.json(또는 pinned_post.json)에서 가져온다.
+    # Claude 자동생성을 하지 않으므로 ANTHROPIC_API_KEY / 크레딧이 필요 없다.
 
-    # DRY_RUN: Threads 토큰 없이 글 생성 파이프라인만 검증(게시 스킵).
+    # DRY_RUN: 게시는 건너뛰고 오늘 나갈 글만 검증(토큰 불필요).
     dry_run = _is_truthy(os.environ.get("DRY_RUN"))
     if dry_run:
         user_id = access_token = ""
@@ -390,10 +411,11 @@ def main() -> None:
         print(f"[{now:%Y-%m-%d %H:%M KST}] 고정 글(pinned_post.json)을 게시합니다.")
         post = pinned
     else:
-        # 소재 풀을 날짜 기준으로 순환 선택 → 블로그·유튜브 주제가 골고루 나온다.
-        topic = TOPICS[now.date().toordinal() % len(TOPICS)]
-        print(f"[{now:%Y-%m-%d %H:%M KST}] 소재: {topic['name']} (훅: {topic['hook']})")
-        post = generate_post(topic)
+        # 미리 써둔 큐에서 날짜 기준으로 순환 선택 → 매일 한 편씩 자동 게시(크레딧 0).
+        queue = load_queue()
+        idx = now.date().toordinal() % len(queue)
+        post = queue[idx]
+        print(f"[{now:%Y-%m-%d %H:%M KST}] 큐 글 {idx + 1}/{len(queue)} 게시(크레딧 미사용).")
 
     print("=== 생성된 글 ===")
     print(post["main"])
