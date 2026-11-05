@@ -262,12 +262,28 @@ def generate_post(topic: dict) -> dict:
     sys.exit(f"[오류] {MAX_GEN_TRIES}회 시도 후에도 유효한 글 생성 실패: {last_err}")
 
 
+# 전남 지역 노출용 주제 태그(topic_tag). 스레드는 글 하나에 주제 태그 1개만 붙는다.
+# 날짜 기준으로 순환해 main 글에만 붙인다. 글에 "topic_tag" 가 있으면 그 값을 우선한다.
+REGION_TAGS = ["광주", "목포", "여수", "나주", "순천", "전남"]
+
+
+def pick_region_tag(day_ordinal: int) -> str:
+    return REGION_TAGS[day_ordinal % len(REGION_TAGS)]
+
+
 def _create_container(user_id: str, access_token: str, text: str,
-                      reply_to_id: str | None = None) -> str:
+                      reply_to_id: str | None = None, topic_tag: str | None = None) -> str:
     payload = {"media_type": "TEXT", "text": text, "access_token": access_token}
     if reply_to_id:
         payload["reply_to_id"] = reply_to_id
+    if topic_tag:
+        payload["topic_tag"] = topic_tag
     resp = requests.post(f"{THREADS_API}/{user_id}/threads", json=payload, timeout=30)
+    if not resp.ok and topic_tag:
+        # 태그가 거절돼도 발행은 막지 않는다: 태그 없이 재시도
+        print(f"[경고] topic_tag '{topic_tag}' 거절(HTTP {resp.status_code}: {resp.text[:200]}) → 태그 없이 재시도")
+        payload.pop("topic_tag")
+        resp = requests.post(f"{THREADS_API}/{user_id}/threads", json=payload, timeout=30)
     resp.raise_for_status()
     return resp.json()["id"]
 
@@ -283,9 +299,10 @@ def _publish(user_id: str, access_token: str, creation_id: str) -> str:
 
 
 def publish_one(user_id: str, access_token: str, text: str,
-                reply_to_id: str | None = None, wait: int = 30) -> str:
+                reply_to_id: str | None = None, wait: int = 30,
+                topic_tag: str | None = None) -> str:
     """컨테이너 생성 → 대기 → 발행. 게시물 ID 반환."""
-    creation_id = _create_container(user_id, access_token, text, reply_to_id)
+    creation_id = _create_container(user_id, access_token, text, reply_to_id, topic_tag)
     time.sleep(wait)  # Threads 권장 대기
     return _publish(user_id, access_token, creation_id)
 
@@ -295,8 +312,8 @@ def post_to_threads(user_id: str, access_token: str, post: dict) -> str:
 
     main 게시물 ID를 반환한다.
     """
-    main_id = publish_one(user_id, access_token, post["main"])
-    print(f"  main 게시 완료: {main_id}")
+    main_id = publish_one(user_id, access_token, post["main"], topic_tag=post.get("topic_tag"))
+    print(f"  main 게시 완료: {main_id} (주제 태그: {post.get('topic_tag') or '없음'})")
 
     # 이어지는 스레드: 직전 글에 답글로 연결해 체인 형성
     prev_id = main_id
@@ -417,6 +434,8 @@ def main() -> None:
         post = queue[idx]
         print(f"[{now:%Y-%m-%d %H:%M KST}] 큐 글 {idx + 1}/{len(queue)} 게시(크레딧 미사용).")
 
+    post.setdefault("topic_tag", pick_region_tag(now.date().toordinal()))
+    print(f"주제 태그: {post['topic_tag']}")
     print("=== 생성된 글 ===")
     print(post["main"])
     if post.get("thread_chain"):
